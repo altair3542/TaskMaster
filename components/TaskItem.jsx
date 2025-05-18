@@ -1,24 +1,37 @@
+// components/TaskItem.js
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity
+} from 'react-native';
 
-export default function TaskItem({ task }) {
-    return (
-        <View style={styles.item}>
-            <Text style={styles.title}>
-                {task.completed ? '✅': '❌'} {task.title}
-            </Text>
-        </View>
-    )
+export default function TaskItem({ task, onToggle }) {
+  return (
+    <View style={styles.item}>
+      {/* Al pulsar esta zona vamos a alternar completed */}
+      <TouchableOpacity onPress={onToggle} style={styles.touchable}>
+        <Text style={styles.title}>
+          {task.completed ? '✅' : '⬜️'} {task.title}
+        </Text>
+      </TouchableOpacity>
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
-    item: {
-      padding: 12,
-      backgroundColor: '#FFF',
-      marginBottom: 8,
-      borderRadius: 6,
-    },
-    title: { fontSize: 16 },
-  });
-
-  //comentario por que ajá
+  item: {
+    backgroundColor: '#FFF',
+    padding: 12,
+    marginBottom: 8,
+    borderRadius: 6,
+  },
+  touchable: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  title: {
+    fontSize: 16,
+  },
+});
