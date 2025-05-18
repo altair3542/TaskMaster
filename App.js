@@ -11,10 +11,19 @@ import {
   Button,
   TouchableOpacity,
   StatusBar,
-  Platform
+  Platform,
+  Alert
 } from "react-native";
-import { fetchTasks, createTask, updateTask, deleteTask } from "./services/api";
+import {
+  fetchTasks,
+  createTask as apiCreateTask,
+  updateTask as apiUpdateTask,
+  deleteTask as apiDeleteTask
+} from "./services/api";
 import TaskItem from "./components/TaskItem";
+
+// Helper para generar IDs únicos
+const generateId = () => Date.now().toString();
 
 export default function App() {
   const [tasks, setTasks] = useState([]);
@@ -22,56 +31,75 @@ export default function App() {
   const [newTitle, setNewTitle] = useState("");
   const [editingId, setEditingId] = useState(null);
 
+  // Al montar, cargamos las primeras 10 tareas del servidor
   useEffect(() => {
     fetchTasks()
-      .then(setTasks)
+      .then(fetched => setTasks(fetched))
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);
 
-  // Agregar o actualizar tarea
+  // Agregar o actualizar título
   const handleSubmit = () => {
     if (editingId) {
-      updateTask(editingId, { title: newTitle })
-        .then(updated => {
-          setTasks(tasks.map(t =>
-            t.id === updated.id ? { ...t, title: updated.title } : t
-          ));
-          setEditingId(null);
-          setNewTitle("");
-        })
-        .catch(console.error);
+      // 1) Actualizamos inmediatamente en UI
+      setTasks(tasks.map(t =>
+        t.id === editingId ? { ...t, title: newTitle } : t
+      ));
+      // 2) Intentamos actualizar en el servidor (no bloquea la UI)
+      apiUpdateTask(editingId, { title: newTitle })
+        .catch(err => console.warn("No se pudo actualizar en servidor:", err.message));
     } else {
-      createTask(newTitle)
-        .then(task => {
-          setTasks([task, ...tasks]);
-          setNewTitle("");
-        })
-        .catch(console.error);
+      const localId = generateId();
+      const newTask = { id: localId, title: newTitle, completed: false };
+      // 1) Lo añadimos de inmediato
+      setTasks([newTask, ...tasks]);
+      // 2) Enviamos al servidor (no esperamos éxito para UX)
+      apiCreateTask(newTitle)
+        .catch(err => console.warn("No se pudo crear en servidor:", err.message));
     }
+    // Limpiamos formulario
+    setEditingId(null);
+    setNewTitle("");
   };
 
-  // Marcar/completar sin eliminar el texto
+  // Toggle completado
   const handleToggle = task => {
-    const nuevoEstado = !task.completed;
-    updateTask(task.id, { completed: nuevoEstado })
-      .then(() => {
-        setTasks(tasks.map(t =>
-          t.id === task.id
-            ? { ...t, completed: nuevoEstado }
-            : t
-        ));
-      })
-      .catch(console.error);
+    // 1) Optimista: actualizamos UI
+    setTasks(tasks.map(t =>
+      t.id === task.id ? { ...t, completed: !t.completed } : t
+    ));
+    // 2) Intentamos en servidor
+    apiUpdateTask(task.id, { completed: !task.completed })
+      .catch(err => console.warn("No se pudo toggle en servidor:", err.message));
   };
 
   // Eliminar tarea
   const handleDelete = id => {
-    deleteTask(id)
-      .then(() => {
-        setTasks(tasks.filter(t => t.id !== id));
-      })
-      .catch(console.error);
+    Alert.alert(
+      "Eliminar tarea",
+      "¿Seguro que quieres borrar esta tarea?",
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Eliminar",
+          style: "destructive",
+          onPress: () => {
+            // 1) Optimista: quitamos de UI
+            setTasks(tasks.filter(t => t.id !== id));
+            // 2) Intentamos en servidor
+            apiDeleteTask(id)
+              .catch(err => console.warn("No se pudo eliminar en servidor:", err.message));
+          }
+        }
+      ]
+    );
+  };
+
+  // Iniciar modo edición
+  const handleEdit = task => {
+    setEditingId(task.id);
+    setNewTitle(task.title);
   };
 
   if (loading) {
@@ -103,17 +131,14 @@ export default function App() {
 
       <FlatList
         data={tasks}
-        keyExtractor={task => task.id.toString()}
+        keyExtractor={t => t.id}
         contentContainerStyle={styles.list}
         renderItem={({ item }) => (
           <TaskItem
             task={item}
             onToggle={() => handleToggle(item)}
             onDelete={() => handleDelete(item.id)}
-            onEdit={() => {
-              setEditingId(item.id);
-              setNewTitle(item.title);
-            }}
+            onEdit={() => handleEdit(item)}
           />
         )}
       />
